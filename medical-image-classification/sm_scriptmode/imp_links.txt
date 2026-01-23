@@ -1,0 +1,5 @@
+1. https://sagemaker.readthedocs.io/en/stable/frameworks/pytorch/using_pytorch.html
+2. https://github.com/aws-samples/amazon-sagemaker-custom-container/blob/master/Dockerfile
+
+Important sagemaker links to read 
+https://medium.com/@pandey.vikesh/move-from-local-jupyter-to-amazon-sagemaker-part-1-7ef14af0fe9d
