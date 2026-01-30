@@ -1,6 +1,6 @@
 # Medical Image Classification Pipeline with AWS Integration
 
-A comprehensive medical image classification system that leverages deep learning models (DenseNet121 and Vision Transformer) to analyze and classify medical images, with seamless integration across AWS services including Amazon Elastic Compute Cloud (Amazon EC2), Amazon SageMaker, and Amazon Elastic Container Registry (Amazon ECR).
+A comprehensive medical image classification system that leverages deep learning models (DenseNet121 and Vision Transformer) to analyze and classify medical images, with seamless integration across AWS services including EC2, SageMaker, and ECR.
 
 This project provides an end-to-end solution for medical image classification, supporting both local development on EC2 instances and production deployment through Amazon SageMaker. The system includes data preprocessing, model training, evaluation, and visualization components, with support for multiple deep learning architectures optimized for medical imaging tasks.
 
@@ -15,6 +15,12 @@ Key features include:
 ## Repository Structure
 ```
 medical-image-classification/
+├── notebooks/                     # Jupyter notebooks for end-to-end workflows
+│   ├── 00_ec2_training/          # EC2-based training examples
+│   ├── 01_data_preprocessing/    # Data preprocessing with SageMaker Processing
+│   ├── 02_sm_script_mode/        # SageMaker Script Mode training
+│   ├── 03_sagemaker_byoc/        # SageMaker Bring Your Own Container
+│   └── 04_sagemaker_byoc_mlflow/ # BYOC with MLflow integration
 ├── ec2/                           # EC2 instance training components
 │   ├── train.py                  # Main training script
 │   ├── model_def.py             # Model architecture definitions
@@ -72,6 +78,14 @@ cd ../../sm_preprocessing/app
 
 ### Quick Start
 
+#### Using Jupyter Notebooks (Recommended)
+For interactive workflows with SageMaker:
+```bash
+cd medical-image-classification/notebooks
+# Follow notebooks in order: 00 → 01 → 02 → 03 → 04
+```
+
+#### Command Line
 1. Preprocess your data:
 ```bash
 python sm_preprocessing/app/preprocessing.py \

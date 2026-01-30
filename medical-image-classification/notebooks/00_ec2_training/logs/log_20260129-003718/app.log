@@ -1,0 +1,6 @@
+2026-01-29 00:38:10,004 - Classes: 8, Train: 80, Val: 80
+2026-01-29 00:38:19,504 - Starting training: DenseNet121 with 8 classes
+2026-01-29 00:38:54,395 - Val Loss: 5.0640, Val Acc: 0.1375
+2026-01-29 00:38:54,538 - ✓ Saved best model (loss: 5.0640)
+2026-01-29 00:38:54,539 - Epoch 0: Train Loss=2.1507, Train Acc=0.1250, Val Loss=5.0640
+2026-01-29 00:39:53,436 - Model saved to /home/ubuntu/data/spine-output/DenseNet121/model.pth

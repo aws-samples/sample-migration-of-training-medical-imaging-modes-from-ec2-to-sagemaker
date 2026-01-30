@@ -1,7 +1,0 @@
-torch
-monai==1.4.0
-torchvision
-itk
-numpy
-tensorboard
-einops

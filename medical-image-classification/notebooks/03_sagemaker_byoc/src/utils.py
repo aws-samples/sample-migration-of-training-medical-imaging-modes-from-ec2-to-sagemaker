@@ -27,7 +27,7 @@ def generate_list_labels(data_folder):
     num_classes = len(list_labels)
     count = 0
     #read label_dict from a json file
-    fid = open("./label_dict.json", "r", encoding='utf-8')
+    fid = open("./label_dict.json", "r")
     label_dict = json.load(fid)
     fid.close()
         
