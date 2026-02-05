@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  training:
+    build: .
+    volumes:
+      - ./data:/app/data
+      - ./output:/app/output
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+    command: >
+      python train_simple.py
+      --model_name SegResNet
+      --data /app/data
+      --out_dir /app/output
+      --batch_size 2
+      --epochs 10
+      --lr 0.0001
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
