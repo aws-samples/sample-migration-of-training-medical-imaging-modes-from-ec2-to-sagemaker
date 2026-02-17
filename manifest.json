@@ -1,0 +1,147 @@
+{
+  "workshop": {
+    "title": "Training Medical Imaging Models on AWS",
+    "description": "A comprehensive workshop on building, training, and deploying medical imaging classification models using AWS services",
+    "level": "intermediate",
+    "duration": 240,
+    "tags": [
+      "medical-imaging",
+      "machine-learning",
+      "deep-learning",
+      "sagemaker",
+      "ec2",
+      "pytorch",
+      "monai",
+      "computer-vision",
+      "healthcare-ai"
+    ],
+    "services": [
+      "Amazon SageMaker",
+      "Amazon EC2",
+      "Amazon S3",
+      "Amazon ECR",
+      "Amazon CloudWatch",
+      "AWS IAM"
+    ],
+    "version": "2.0",
+    "lastUpdated": "2026-01-15"
+  },
+  "modules": [
+    {
+      "id": "introduction",
+      "title": "Introduction to Medical Imaging on AWS",
+      "duration": 30,
+      "path": "content/01-introduction/_index.md",
+      "topics": [
+        "Medical Imaging AI Landscape",
+        "AWS Services Overview",
+        "Environment Setup",
+        "Dataset Exploration"
+      ]
+    },
+    {
+      "id": "classification",
+      "title": "Medical Image Classification Track",
+      "duration": 120,
+      "path": "content/02-classification/_index.md",
+      "labs": [
+        {
+          "id": "preprocessing",
+          "title": "Data Preprocessing with SageMaker Processing",
+          "duration": 30,
+          "path": "content/02-classification/01-preprocessing.md"
+        },
+        {
+          "id": "ec2-training",
+          "title": "EC2 Baseline Training",
+          "duration": 30,
+          "path": "content/02-classification/02-ec2-training.md"
+        },
+        {
+          "id": "script-mode",
+          "title": "SageMaker Script Mode",
+          "duration": 30,
+          "path": "content/02-classification/03-script-mode.md"
+        }
+      ]
+    },
+    {
+      "id": "segmentation",
+      "title": "Medical Image Segmentation Track",
+      "duration": 120,
+      "path": "content/03-segmentation/_index.md",
+      "labs": [
+        {
+          "id": "single-gpu",
+          "title": "Single GPU Training with MONAI",
+          "duration": 30,
+          "path": "content/03-segmentation/01-single-gpu.md"
+        },
+        {
+          "id": "multi-gpu-fsdp",
+          "title": "Multi-GPU FSDP Training",
+          "duration": 30,
+          "path": "content/03-segmentation/02-multi-gpu-fsdp.md"
+        },
+        {
+          "id": "experiment-tracking",
+          "title": "Experiment Tracking with WandB",
+          "duration": 30,
+          "path": "content/03-segmentation/03-experiment-tracking.md"
+        },
+        {
+          "id": "hyperparameter-optimization",
+          "title": "Hyperparameter Optimization",
+          "duration": 30,
+          "path": "content/03-segmentation/04-hyperparameter-optimization.md"
+        }
+      ]
+    },
+    {
+      "id": "deployment",
+      "title": "Production Deployment",
+      "duration": 30,
+      "path": "content/04-deployment/_index.md"
+    }
+  ],
+  "infrastructure": {
+    "cloudformation": [
+      {
+        "name": "workshop-infrastructure",
+        "path": "cloudformation/workshop-infrastructure.yaml",
+        "description": "Complete workshop infrastructure"
+      },
+      {
+        "name": "sagemaker-studio-setup",
+        "path": "cloudformation/sagemaker-studio-setup.yaml",
+        "description": "SageMaker Studio Domain setup"
+      },
+      {
+        "name": "ec2-pytorch",
+        "path": "cloudformation/ec2-pytorch.yaml",
+        "description": "EC2 PyTorch instance"
+      }
+    ],
+    "iam": {
+      "participantPolicy": "static/workshop-iam-policy.json"
+    }
+  },
+  "resources": {
+    "notebooks": [
+      "notebooks/01-data-preprocessing.ipynb",
+      "notebooks/02-ec2-training.ipynb",
+      "notebooks/03-sagemaker-script-mode.ipynb",
+      "notebooks/04-sagemaker-byoc.ipynb",
+      "notebooks/05-model-evaluation-deployment.ipynb"
+    ],
+    "documentation": [
+      "README.md",
+      "cloudformation/README.md",
+      "cloudformation/EC2-PYTORCH-README.md",
+      "sagemaker-setup/README.md",
+      "IAM-POLICY-EXPLAINED.md",
+      "EC2-PERMISSIONS-ADDED.md",
+      "WORKSHOP-METADATA.md"
+    ]
+  }
+}

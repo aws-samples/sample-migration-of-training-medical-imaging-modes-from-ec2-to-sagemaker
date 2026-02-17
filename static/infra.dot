@@ -1,0 +1,13 @@
+digraph INFRA {
+  node [ color = "black", fillcolor = "#E6E6E6", height =1, style = "filled,bold,rounded", fontname = "Arial" ];
+  "sm-training-byoc" [ label = "sm-training-byoc
+(AWS::ECR::Repository)", shape =cylinder, fillcolor = "#FFF5CD" ];
+  "sm-preprocessing" [ label = "sm-preprocessing
+(AWS::ECR::Repository)", shape =cylinder, fillcolor = "#FFF5CD" ];
+  "training-image" [ label = "training-image
+(Docker::Image)", shape =rectangle, fillcolor = "#B7E0FF" ];
+  "preprocessing-image" [ label = "preprocessing-image
+(Docker::Image)", shape =rectangle, fillcolor = "#B7E0FF" ];
+  "training-image" -> "sm-training-byoc";
+  "preprocessing-image" -> "sm-preprocessing";
+}

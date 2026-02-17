@@ -1,0 +1,287 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'EC2 Instance with PyTorch Deep Learning AMI for Medical Imaging Workshop'
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: 'g4dn.xlarge'
+    AllowedValues:
+      - 't3.large'
+      - 't3.xlarge'
+      - 'g4dn.xlarge'
+      - 'g4dn.2xlarge'
+      - 'g4dn.4xlarge'
+      - 'p3.2xlarge'
+    Description: 'EC2 instance type (g4dn.xlarge recommended for GPU training)'
+
+  KeyPairName:
+    Type: String
+    Description: 'EC2 Key Pair name for SSH access (leave empty to create without SSH key)'
+    Default: ''
+
+  AllowSSHFrom:
+    Type: String
+    Default: '0.0.0.0/0'
+    Description: 'CIDR IP range allowed to SSH (default: anywhere - restrict for production)'
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+
+  VolumeSize:
+    Type: Number
+    Default: 100
+    MinValue: 50
+    MaxValue: 500
+    Description: 'EBS volume size in GB'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Instance Configuration'
+        Parameters:
+          - InstanceType
+          - VolumeSize
+      - Label:
+          default: 'Access Configuration'
+        Parameters:
+          - KeyPairName
+          - AllowSSHFrom
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
+
+Mappings:
+  # Deep Learning AMI (PyTorch) - Ubuntu 20.04
+  # These AMIs are region-specific and updated regularly
+  # Update these IDs with latest AMIs from: https://aws.amazon.com/releasenotes/aws-deep-learning-ami-gpu-pytorch/
+  RegionMap:
+    us-east-1:
+      AMI: ami-0c02fb55956c7d316
+    us-east-2:
+      AMI: ami-0a0ad6b70e61be944
+    us-west-1:
+      AMI: ami-0d382e80be7ffdae5
+    us-west-2:
+      AMI: ami-0ceecbb0f30a902a6
+    eu-west-1:
+      AMI: ami-0d71ea30463e0ff8d
+    eu-central-1:
+      AMI: ami-0a1ee2fb28fe05df3
+    ap-southeast-1:
+      AMI: ami-0c802847a7dd848c0
+    ap-northeast-1:
+      AMI: ami-0b7546e839d7ace12
+
+Resources:
+  # IAM Role for EC2 Instance
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'pytorch-ec2-role-${AWS::StackName}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess
+      Policies:
+        - PolicyName: SageMakerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sagemaker:CreateTrainingJob
+                  - sagemaker:DescribeTrainingJob
+                  - sagemaker:CreateProcessingJob
+                  - sagemaker:DescribeProcessingJob
+                  - sagemaker:CreateModel
+                  - sagemaker:DescribeModel
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-EC2Role'
+
+  # Instance Profile
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub 'pytorch-ec2-profile-${AWS::StackName}'
+      Roles:
+        - !Ref EC2InstanceRole
+
+  # Security Group
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${AWS::StackName}-pytorch-sg'
+      GroupDescription: 'Security group for PyTorch EC2 instance'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AllowSSHFrom
+          Description: 'SSH access'
+        - IpProtocol: tcp
+          FromPort: 8888
+          ToPort: 8888
+          CidrIp: !Ref AllowSSHFrom
+          Description: 'Jupyter notebook access'
+        - IpProtocol: tcp
+          FromPort: 6006
+          ToPort: 6006
+          CidrIp: !Ref AllowSSHFrom
+          Description: 'TensorBoard access'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-pytorch-sg'
+
+  # EC2 Instance
+  PyTorchEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: !Ref VolumeSize
+            VolumeType: gp3
+            DeleteOnTermination: true
+            Encrypted: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -e
+          
+          # Update system
+          apt-get update -y
+          
+          # Install additional packages
+          apt-get install -y htop tmux git
+          
+          # Install medical imaging libraries
+          source activate pytorch
+          pip install monai==1.4.0
+          pip install nibabel==5.1.0
+          pip install simpleitk==2.3.1
+          pip install pydicom==2.4.3
+          pip install scikit-image==0.21.0
+          pip install grad-cam pytorch-grad-cam
+          
+          # Configure Jupyter for remote access
+          mkdir -p /home/ubuntu/.jupyter
+          cat > /home/ubuntu/.jupyter/jupyter_notebook_config.py << 'EOF'
+          c.NotebookApp.ip = '0.0.0.0'
+          c.NotebookApp.open_browser = False
+          c.NotebookApp.port = 8888
+          c.NotebookApp.token = ''
+          c.NotebookApp.password = ''
+          EOF
+          chown -R ubuntu:ubuntu /home/ubuntu/.jupyter
+          
+          # Create startup script for Jupyter
+          cat > /home/ubuntu/start-jupyter.sh << 'EOF'
+          #!/bin/bash
+          source activate pytorch
+          cd /home/ubuntu
+          nohup jupyter notebook > jupyter.log 2>&1 &
+          echo "Jupyter started on port 8888"
+          echo "Access at: http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):8888"
+          EOF
+          chmod +x /home/ubuntu/start-jupyter.sh
+          chown ubuntu:ubuntu /home/ubuntu/start-jupyter.sh
+          
+          # Create welcome message
+          cat > /home/ubuntu/README.txt << 'EOF'
+          PyTorch Deep Learning EC2 Instance
+          ===================================
+          
+          Quick Start:
+          1. Start Jupyter: ./start-jupyter.sh
+          2. Access Jupyter at: http://YOUR-PUBLIC-IP:8888
+          3. Clone workshop: git clone YOUR-REPO-URL
+          
+          Installed Packages:
+          - PyTorch (with CUDA support)
+          - MONAI (medical imaging)
+          - nibabel, SimpleITK, pydicom
+          - scikit-image, grad-cam
+          
+          Useful Commands:
+          - Check GPU: nvidia-smi
+          - Activate PyTorch: source activate pytorch
+          - Start TensorBoard: tensorboard --logdir=./logs --host=0.0.0.0
+          
+          AWS Resources:
+          - S3 access: Configured via IAM role
+          - ECR access: Configured via IAM role
+          - SageMaker: Can submit jobs from this instance
+          EOF
+          chown ubuntu:ubuntu /home/ubuntu/README.txt
+          
+          # Signal completion
+          echo "Setup complete!" > /home/ubuntu/setup-complete.txt
+          
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-pytorch-instance'
+        - Key: Purpose
+          Value: 'Medical Imaging Workshop'
+
+Outputs:
+  InstanceId:
+    Description: 'EC2 Instance ID'
+    Value: !Ref PyTorchEC2Instance
+    Export:
+      Name: !Sub '${AWS::StackName}-InstanceId'
+
+  PublicIP:
+    Description: 'Public IP address of the instance'
+    Value: !GetAtt PyTorchEC2Instance.PublicIp
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicIP'
+
+  PublicDNS:
+    Description: 'Public DNS name of the instance'
+    Value: !GetAtt PyTorchEC2Instance.PublicDnsName
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicDNS'
+
+  SSHCommand:
+    Description: 'SSH command to connect to the instance'
+    Value: !If 
+      - HasKeyPair
+      - !Sub 'ssh -i ${KeyPairName}.pem ubuntu@${PyTorchEC2Instance.PublicIp}'
+      - 'No key pair specified - SSH not available'
+
+  JupyterURL:
+    Description: 'Jupyter Notebook URL'
+    Value: !Sub 'http://${PyTorchEC2Instance.PublicIp}:8888'
+
+  TensorBoardURL:
+    Description: 'TensorBoard URL'
+    Value: !Sub 'http://${PyTorchEC2Instance.PublicIp}:6006'
+
+  InstanceType:
+    Description: 'Instance type used'
+    Value: !Ref InstanceType
+
+  QuickStartInstructions:
+    Description: 'Quick start instructions'
+    Value: !Sub |
+      1. SSH to instance: ssh -i ${KeyPairName}.pem ubuntu@${PyTorchEC2Instance.PublicIp}
+      2. Start Jupyter: ./start-jupyter.sh
+      3. Access Jupyter: http://${PyTorchEC2Instance.PublicIp}:8888
+      4. Check GPU: nvidia-smi
+      5. Activate PyTorch: source activate pytorch
+      
+      Note: Wait 2-3 minutes after launch for setup to complete.
+      Check status: cat /home/ubuntu/setup-complete.txt

@@ -1,0 +1,383 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Medical Imaging Workshop - SageMaker Studio Setup'
+
+Parameters:
+  WorkshopName:
+    Type: String
+    Default: 'medical-imaging-workshop'
+    Description: 'Name prefix for all workshop resources'
+    
+  DomainName:
+    Type: String
+    Default: 'medical-imaging-domain'
+    Description: 'SageMaker Studio domain name'
+    
+  UserProfileName:
+    Type: String
+    Default: 'workshop-user'
+    Description: 'Default user profile name'
+
+Resources:
+  # VPC for SageMaker Studio
+  WorkshopVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${WorkshopName}-VPC'
+        - Key: Workshop
+          Value: !Ref WorkshopName
+
+  # Private Subnet
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref WorkshopVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${WorkshopName}-PrivateSubnet'
+        - Key: Workshop
+          Value: !Ref WorkshopName
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${WorkshopName}-IGW'
+        - Key: Workshop
+          Value: !Ref WorkshopName
+
+  # Attach Internet Gateway to VPC
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref WorkshopVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # NAT Gateway EIP
+  NATGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${WorkshopName}-NAT-EIP'
+
+  # Public Subnet for NAT Gateway
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref WorkshopVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${WorkshopName}-PublicSubnet'
+        - Key: Workshop
+          Value: !Ref WorkshopName
+
+  # NAT Gateway
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub '${WorkshopName}-NAT'
+
+  # Route Table for Public Subnet
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref WorkshopVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${WorkshopName}-PublicRT'
+
+  # Route to Internet Gateway
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  # Associate Public Subnet with Route Table
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  # Route Table for Private Subnet
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref WorkshopVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${WorkshopName}-PrivateRT'
+
+  # Route to NAT Gateway
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway
+
+  # Associate Private Subnet with Route Table
+  PrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+
+  # Security Group for SageMaker Studio
+  StudioSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${WorkshopName}-Studio-SG'
+      GroupDescription: 'Security group for SageMaker Studio'
+      VpcId: !Ref WorkshopVPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: 'All outbound traffic'
+      Tags:
+        - Key: Name
+          Value: !Sub '${WorkshopName}-Studio-SG'
+        - Key: Workshop
+          Value: !Ref WorkshopName
+
+  # S3 Bucket for workshop data
+  WorkshopDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${WorkshopName}-studio-data-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Workshop
+          Value: !Ref WorkshopName
+
+  # IAM Role for SageMaker Studio Execution
+  StudioExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${WorkshopName}-StudioExecutionRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - sagemaker.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: WorkshopComprehensivePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: S3FullAccess
+                Effect: Allow
+                Action:
+                  - s3:*
+                Resource: '*'
+              - Sid: SageMakerTraining
+                Effect: Allow
+                Action:
+                  - sagemaker:CreateTrainingJob
+                  - sagemaker:DescribeTrainingJob
+                  - sagemaker:StopTrainingJob
+                  - sagemaker:ListTrainingJobs
+                  - sagemaker:ListTrainingJobsForHyperParameterTuningJob
+                  - sagemaker:AddTags
+                  - sagemaker:ListTags
+                Resource: '*'
+              - Sid: SageMakerHyperParameterTuning
+                Effect: Allow
+                Action:
+                  - sagemaker:CreateHyperParameterTuningJob
+                  - sagemaker:DescribeHyperParameterTuningJob
+                  - sagemaker:StopHyperParameterTuningJob
+                  - sagemaker:ListHyperParameterTuningJobs
+                  - sagemaker:UpdateHyperParameterTuningJob
+                Resource: '*'
+              - Sid: SageMakerModelDeployment
+                Effect: Allow
+                Action:
+                  - sagemaker:CreateModel
+                  - sagemaker:DescribeModel
+                  - sagemaker:DeleteModel
+                  - sagemaker:ListModels
+                  - sagemaker:CreateEndpointConfig
+                  - sagemaker:DescribeEndpointConfig
+                  - sagemaker:DeleteEndpointConfig
+                  - sagemaker:ListEndpointConfigs
+                  - sagemaker:CreateEndpoint
+                  - sagemaker:DescribeEndpoint
+                  - sagemaker:DeleteEndpoint
+                  - sagemaker:UpdateEndpoint
+                  - sagemaker:ListEndpoints
+                  - sagemaker:InvokeEndpoint
+                Resource: '*'
+              - Sid: SageMakerProcessing
+                Effect: Allow
+                Action:
+                  - sagemaker:CreateProcessingJob
+                  - sagemaker:DescribeProcessingJob
+                  - sagemaker:StopProcessingJob
+                  - sagemaker:ListProcessingJobs
+                Resource: '*'
+              - Sid: SageMakerExperiments
+                Effect: Allow
+                Action:
+                  - sagemaker:CreateExperiment
+                  - sagemaker:DescribeExperiment
+                  - sagemaker:DeleteExperiment
+                  - sagemaker:CreateTrial
+                  - sagemaker:DescribeTrial
+                  - sagemaker:DeleteTrial
+                  - sagemaker:CreateTrialComponent
+                  - sagemaker:DescribeTrialComponent
+                  - sagemaker:UpdateTrialComponent
+                  - sagemaker:DeleteTrialComponent
+                  - sagemaker:AssociateTrialComponent
+                  - sagemaker:DisassociateTrialComponent
+                Resource: '*'
+              - Sid: ECRAccess
+                Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - ecr:DescribeRepositories
+                  - ecr:DescribeImages
+                  - ecr:CreateRepository
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+                  - ecr:PutImage
+                  - ecr:BatchDeleteImage
+                Resource: '*'
+              - Sid: CloudWatchLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogStreams
+                  - logs:GetLogEvents
+                Resource: '*'
+              - Sid: CloudWatchMetrics
+                Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                  - cloudwatch:GetMetricData
+                  - cloudwatch:GetMetricStatistics
+                  - cloudwatch:ListMetrics
+                Resource: '*'
+              - Sid: IAMPassRole
+                Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: sagemaker.amazonaws.com
+      Tags:
+        - Key: Workshop
+          Value: !Ref WorkshopName
+
+  # SageMaker Studio Domain
+  StudioDomain:
+    Type: AWS::SageMaker::Domain
+    Properties:
+      DomainName: !Ref DomainName
+      AuthMode: IAM
+      DefaultUserSettings:
+        ExecutionRole: !GetAtt StudioExecutionRole.Arn
+        SecurityGroups:
+          - !Ref StudioSecurityGroup
+      SubnetIds:
+        - !Ref PrivateSubnet
+      VpcId: !Ref WorkshopVPC
+      Tags:
+        - Key: Workshop
+          Value: !Ref WorkshopName
+
+  # Default User Profile
+  DefaultUserProfile:
+    Type: AWS::SageMaker::UserProfile
+    Properties:
+      DomainId: !Ref StudioDomain
+      UserProfileName: !Ref UserProfileName
+      UserSettings:
+        ExecutionRole: !GetAtt StudioExecutionRole.Arn
+      Tags:
+        - Key: Workshop
+          Value: !Ref WorkshopName
+
+Outputs:
+  StudioDomainId:
+    Description: 'SageMaker Studio Domain ID'
+    Value: !Ref StudioDomain
+    Export:
+      Name: !Sub '${AWS::StackName}-DomainId'
+
+  StudioDomainArn:
+    Description: 'SageMaker Studio Domain ARN'
+    Value: !GetAtt StudioDomain.DomainArn
+    Export:
+      Name: !Sub '${AWS::StackName}-DomainArn'
+
+  UserProfileArn:
+    Description: 'Default User Profile ARN'
+    Value: !GetAtt DefaultUserProfile.UserProfileArn
+    Export:
+      Name: !Sub '${AWS::StackName}-UserProfileArn'
+
+  WorkshopDataBucket:
+    Description: 'S3 bucket for workshop data'
+    Value: !Ref WorkshopDataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-DataBucket'
+
+  StudioExecutionRoleArn:
+    Description: 'ARN of the SageMaker Studio execution role'
+    Value: !GetAtt StudioExecutionRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ExecutionRole'
+
+  StudioURL:
+    Description: 'SageMaker Studio URL'
+    Value: !Sub 'https://${StudioDomain}.studio.${AWS::Region}.sagemaker.aws/jupyter/default/lab?'
+
+  QuickStartInstructions:
+    Description: 'Quick start instructions'
+    Value: !Sub |
+      1. Open SageMaker Studio: https://${AWS::Region}.console.aws.amazon.com/sagemaker/home?region=${AWS::Region}#/studio/${StudioDomain}
+      2. Launch Studio for user: ${UserProfileName}
+      3. Clone workshop repository in Studio terminal: git clone YOUR-WORKSHOP-REPO-URL
+      4. Navigate to notebooks/ directory and start with 01-data-preprocessing.ipynb
+      5. Data bucket: s3://${WorkshopDataBucket}

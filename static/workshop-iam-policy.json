@@ -1,0 +1,228 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "S3FullAccess",
+      "Effect": "Allow",
+      "Action": [
+        "s3:*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SageMakerTraining",
+      "Effect": "Allow",
+      "Action": [
+        "sagemaker:CreateTrainingJob",
+        "sagemaker:DescribeTrainingJob",
+        "sagemaker:StopTrainingJob",
+        "sagemaker:ListTrainingJobs",
+        "sagemaker:ListTrainingJobsForHyperParameterTuningJob",
+        "sagemaker:AddTags",
+        "sagemaker:ListTags"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SageMakerHyperParameterTuning",
+      "Effect": "Allow",
+      "Action": [
+        "sagemaker:CreateHyperParameterTuningJob",
+        "sagemaker:DescribeHyperParameterTuningJob",
+        "sagemaker:StopHyperParameterTuningJob",
+        "sagemaker:ListHyperParameterTuningJobs"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SageMakerModelDeployment",
+      "Effect": "Allow",
+      "Action": [
+        "sagemaker:CreateModel",
+        "sagemaker:DescribeModel",
+        "sagemaker:DeleteModel",
+        "sagemaker:ListModels",
+        "sagemaker:CreateEndpointConfig",
+        "sagemaker:DescribeEndpointConfig",
+        "sagemaker:DeleteEndpointConfig",
+        "sagemaker:ListEndpointConfigs",
+        "sagemaker:CreateEndpoint",
+        "sagemaker:DescribeEndpoint",
+        "sagemaker:DeleteEndpoint",
+        "sagemaker:UpdateEndpoint",
+        "sagemaker:ListEndpoints",
+        "sagemaker:InvokeEndpoint"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SageMakerProcessing",
+      "Effect": "Allow",
+      "Action": [
+        "sagemaker:CreateProcessingJob",
+        "sagemaker:DescribeProcessingJob",
+        "sagemaker:StopProcessingJob",
+        "sagemaker:ListProcessingJobs"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SageMakerExperiments",
+      "Effect": "Allow",
+      "Action": [
+        "sagemaker:CreateExperiment",
+        "sagemaker:DescribeExperiment",
+        "sagemaker:DeleteExperiment",
+        "sagemaker:CreateTrial",
+        "sagemaker:DescribeTrial",
+        "sagemaker:DeleteTrial",
+        "sagemaker:CreateTrialComponent",
+        "sagemaker:DescribeTrialComponent",
+        "sagemaker:UpdateTrialComponent",
+        "sagemaker:DeleteTrialComponent",
+        "sagemaker:AssociateTrialComponent",
+        "sagemaker:DisassociateTrialComponent"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ECRAccess",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:GetAuthorizationToken",
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:BatchGetImage",
+        "ecr:DescribeRepositories",
+        "ecr:DescribeImages",
+        "ecr:CreateRepository",
+        "ecr:InitiateLayerUpload",
+        "ecr:UploadLayerPart",
+        "ecr:CompleteLayerUpload",
+        "ecr:PutImage"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CloudWatchLogs",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogStreams",
+        "logs:GetLogEvents"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CloudWatchMetrics",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:PutMetricData",
+        "cloudwatch:GetMetricData",
+        "cloudwatch:GetMetricStatistics",
+        "cloudwatch:ListMetrics"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "IAMPassRole",
+      "Effect": "Allow",
+      "Action": [
+        "iam:PassRole"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": [
+            "sagemaker.amazonaws.com",
+            "ec2.amazonaws.com"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "EC2RunInstancesG5XLarge",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:RunInstances"
+      ],
+      "Resource": [
+        "arn:aws:ec2:*:*:instance/*",
+        "arn:aws:ec2:*:*:volume/*",
+        "arn:aws:ec2:*:*:network-interface/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "ec2:InstanceType": "g5.xlarge"
+        }
+      }
+    },
+    {
+      "Sid": "EC2RunInstancesOtherResources",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:RunInstances"
+      ],
+      "Resource": [
+        "arn:aws:ec2:*:*:subnet/*",
+        "arn:aws:ec2:*:*:security-group/*",
+        "arn:aws:ec2:*::image/*",
+        "arn:aws:ec2:*::snapshot/*",
+        "arn:aws:ec2:*:*:key-pair/*",
+        "arn:aws:ec2:*:*:launch-template/*"
+      ]
+    },
+    {
+      "Sid": "EC2InstanceManagement",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeInstances",
+        "ec2:DescribeInstanceStatus",
+        "ec2:DescribeInstanceTypes",
+        "ec2:DescribeImages",
+        "ec2:DescribeKeyPairs",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeVpcs",
+        "ec2:DescribeAvailabilityZones",
+        "ec2:DescribeTags",
+        "ec2:StartInstances",
+        "ec2:StopInstances",
+        "ec2:TerminateInstances",
+        "ec2:RebootInstances",
+        "ec2:GetConsoleOutput",
+        "ec2:GetConsoleScreenshot"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "EC2TaggingOnCreate",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateTags"
+      ],
+      "Resource": [
+        "arn:aws:ec2:*:*:instance/*",
+        "arn:aws:ec2:*:*:volume/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "ec2:CreateAction": "RunInstances"
+        }
+      }
+    },
+    {
+      "Sid": "IAMPassRoleForEC2",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRole",
+        "iam:GetInstanceProfile",
+        "iam:ListInstanceProfiles",
+        "iam:ListInstanceProfilesForRole"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

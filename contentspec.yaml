@@ -1,0 +1,34 @@
+version: 2.0
+
+defaultLocaleCode: en-US
+localeCodes:
+  - en-US
+
+awsAccountConfig:
+  accountSources:
+    - workshop_studio
+  regionConfiguration:
+    deployableRegions:
+      required:
+        - us-east-1
+    minAccessibleRegions: 1
+    maxAccessibleRegions: 3
+    accessibleRegions:
+      required:
+        - us-east-1
+        - us-west-2
+        - eu-west-1
+  participantRole:
+    managedPolicies:
+      - "arn:aws:iam::aws:policy/IAMReadOnlyAccess"
+    iamPolicies:
+      - static/workshop-iam-policy-minimal.json
+
+infrastructure:
+  cloudformationTemplates:
+    - templateLocation: static/workshop-minimal.yaml
+      label: Medical Imaging Workshop - Essential Infrastructure
+      parameters:
+        - templateParameter: WorkshopName
+          defaultValue: medical-imaging-workshop
+          userOverridable: true

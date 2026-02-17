@@ -1,0 +1,52 @@
+baseURL = "/"
+languageCode = "en-US"
+defaultContentLanguage = "en"
+title = "Training Medical Imaging Models on AWS"
+theme = "learn"
+metaDataFormat = "yaml"
+defaultContentLanguageInSubdir = false
+uglyurls = false
+sectionPagesMenu = "main"
+pygmentsCodeFences = true
+pygmentsStyle = "monokai"
+
+[params]
+  themeVariant = "aws"
+  showVisitedLinks = true
+  author = "AWS"
+  description = "A comprehensive workshop on building, training, and deploying medical imaging classification models using AWS services"
+  disableBreadcrumb = false
+  disableNextPrev = false
+  disableLandingPageButton = false
+  disableMermaid = false
+  customMermaidURL = "https://unpkg.com/mermaid@8.8.0/dist/mermaid.min.js"
+  disableSearch = false
+  disableAssetsBusting = false
+  disableLanguageSwitchingButton = true
+  disableShortcutsTitle = false
+  disableInlineCopyToClipBoard = false
+  ghRepo = ""
+  branch = ""
+
+[outputs]
+  home = ["HTML", "RSS", "JSON"]
+
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+
+[[menu.shortcuts]]
+  name = "<i class='fas fa-home'></i> Workshop Home"
+  url = "/"
+  weight = 10
+
+[[menu.shortcuts]]
+  name = "<i class='fas fa-graduation-cap'></i> Modules"
+  url = "/modules/"
+  weight = 20
+
+[[menu.shortcuts]]
+  name = "<i class='fab fa-aws'></i> AWS Console"
+  url = "https://console.aws.amazon.com/"
+  weight = 30
