@@ -1,0 +1,21 @@
+FROM pytorch/pytorch:2.4.1-cuda12.1-cudnn9-runtime
+
+WORKDIR /app
+
+# nnU-Net needs git during install and libgomp1 for OpenMP
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends git libgomp1 && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY training/nnunet/requirements_nnunet.txt .
+RUN pip install --no-cache-dir -r requirements_nnunet.txt
+
+COPY training/nnunet/ training/nnunet/
+
+# Set nnU-Net environment variables
+ENV nnUNet_raw=/tmp/nnUNet_raw
+ENV nnUNet_preprocessed=/tmp/nnUNet_preprocessed
+ENV nnUNet_results=/tmp/nnUNet_results
+ENV PYTHONUNBUFFERED=1
+
+CMD ["python", "training/nnunet/nnunet_pipeline.py", "--stages", "preprocess,train,evaluate"]

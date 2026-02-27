@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  nnunet-preprocess:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.nnunet
+    volumes:
+      - ./data:/app/data
+      - ./output:/app/output
+    environment:
+      - SM_CHANNEL_TRAINING=/app/data
+      - SM_MODEL_DIR=/app/output
+      - nnUNet_raw=/tmp/nnUNet_raw
+      - nnUNet_preprocessed=/tmp/nnUNet_preprocessed
+      - nnUNet_results=/tmp/nnUNet_results
+    command: >
+      python training/nnunet/nnunet_pipeline.py
+      --stages preprocess
+      --data /app/data
+      --out_dir /app/output
+
+  nnunet-train:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.nnunet
+    volumes:
+      - ./data:/app/data
+      - ./output:/app/output
+    environment:
+      - SM_CHANNEL_TRAINING=/app/data
+      - SM_CHANNEL_PREPROCESSED=/app/output
+      - SM_MODEL_DIR=/app/output
+      - nnUNet_raw=/tmp/nnUNet_raw
+      - nnUNet_preprocessed=/tmp/nnUNet_preprocessed
+      - nnUNet_results=/tmp/nnUNet_results
+      - CUDA_VISIBLE_DEVICES=0
+    command: >
+      python training/nnunet/nnunet_pipeline.py
+      --stages train
+      --data /app/data
+      --preprocessed /app/output
+      --out_dir /app/output
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  nnunet-full:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.nnunet
+    volumes:
+      - ./data:/app/data
+      - ./output:/app/output
+    environment:
+      - SM_CHANNEL_TRAINING=/app/data
+      - SM_MODEL_DIR=/app/output
+      - nnUNet_raw=/tmp/nnUNet_raw
+      - nnUNet_preprocessed=/tmp/nnUNet_preprocessed
+      - nnUNet_results=/tmp/nnUNet_results
+      - CUDA_VISIBLE_DEVICES=0
+    command: >
+      python training/nnunet/nnunet_pipeline.py
+      --stages preprocess,train,evaluate
+      --data /app/data
+      --out_dir /app/output
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

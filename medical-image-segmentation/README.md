@@ -35,7 +35,8 @@ medical-image-segmentation/
     ├── lab2_fsdp_multi_gpu.ipynb
     ├── lab3_wandb_experiment_tracking.ipynb
     ├── lab4_ddp_unified_tracking.ipynb
-    └── lab5_hyperparameter_optimization.ipynb
+    ├── lab5_hyperparameter_optimization.ipynb
+    └── lab6_nnunet_pipeline.ipynb
 ```
 
 ## Prerequisites
@@ -105,6 +106,38 @@ cd code/docker
 docker-compose up
 ```
 
+## Data Formats
+
+### nnU-Net Format (Required for Lab 6)
+
+nnU-Net requires data in a specific directory structure:
+
+```
+Dataset001_MedicalSegmentation/
+├── dataset.json          # Metadata file
+├── imagesTr/            # Training images
+│   ├── MedicalSegmentation_001_0000.nii.gz
+│   ├── MedicalSegmentation_001_0001.nii.gz
+│   └── ...
+├── labelsTr/            # Training labels
+│   ├── MedicalSegmentation_001.nii.gz
+│   └── ...
+├── imagesTs/            # Test images (optional)
+└── labelsTs/            # Test labels (optional)
+```
+
+The `dataset.json` must contain:
+```json
+{
+  "channel_names": {"0": "CT"},
+  "labels": {"background": 0, "foreground": 1},
+  "numTraining": 100,
+  "file_ending": ".nii.gz"
+}
+```
+
+See [nnU-Net documentation](https://github.com/MIC-DKFZ/nnUNet/blob/master/documentation/dataset_format.md) for full specification.
+
 ## Workshop Labs
 
 ### Lab 1: Single GPU Training
@@ -164,6 +197,19 @@ Automated hyperparameter tuning:
 - Cost-effective tuning strategies
 
 [Open Lab 5](notebooks/lab5_hyperparameter_optimization.ipynb)
+
+### Lab 6: nnU-Net Self-Configuring Segmentation
+**Duration**: TBD  
+**Instance**: ml.g5.xlarge (1 GPU)
+
+nnU-Net automatically configures preprocessing, architecture, and hyperparameters:
+- Self-configuring pipeline (preprocess, train, evaluate)
+- No manual hyperparameter tuning required
+- State-of-the-art segmentation performance
+
+**Note**: nnU-Net requires data in its specific format (see Data Format section below).
+
+[Open Lab 6](notebooks/lab6_nnunet_pipeline.ipynb)
 
 ## Models
 
