@@ -1,0 +1,10 @@
+torch
+monai==1.4.0
+torchvision
+itk
+numpy==1.26.4
+tensorboard
+einops
+ipykernel
+tqdm
+protobuf==3.20.*
