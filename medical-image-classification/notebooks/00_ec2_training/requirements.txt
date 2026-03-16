@@ -1,5 +1,5 @@
 torch
-monai==1.4.0
+monai==1.5.2rc1
 torchvision
 itk
 numpy==1.26.4
