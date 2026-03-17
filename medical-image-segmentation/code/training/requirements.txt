@@ -6,7 +6,7 @@ einops
 tensorboard
 tqdm
 wandb
-mlflow==3.0.0
+mlflow==3.8.0rc0
 SimpleITK
 nibabel
 sagemaker
