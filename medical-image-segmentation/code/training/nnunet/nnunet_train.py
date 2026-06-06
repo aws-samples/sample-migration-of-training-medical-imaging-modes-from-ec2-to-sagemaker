@@ -19,6 +19,16 @@ import subprocess
 DATASET_ID = 1
 CONFIGURATION = "3d_fullres"
 
+# Built-in nnU-Net trainers by epoch count
+EPOCH_TRAINER_MAP = {
+    5:    "nnUNetTrainer_5epochs",
+    50:   "nnUNetTrainer_50epochs",
+    100:  "nnUNetTrainer_100epochs",
+    250:  "nnUNetTrainer_250epochs",
+    1000: "nnUNetTrainer",           # default
+    2000: "nnUNetTrainer_2000epochs",
+}
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="nnU-Net v2 Stage 2: Training")
@@ -28,6 +38,8 @@ def parse_args():
     parser.add_argument("--out_dir", type=str,
                         default=os.environ.get("SM_MODEL_DIR", "./output"),
                         help="Output directory (SM_MODEL_DIR)")
+    parser.add_argument("--num_epochs", type=int, default=1000,
+                        help="Number of training epochs. Supported: 5, 50, 100, 250, 1000 (default), 2000")
     return parser.parse_args()
 
 
@@ -45,8 +57,17 @@ def run(args):
     if args.preprocessed and os.path.isdir(args.preprocessed):
         _restore_preprocessed(args.preprocessed)
 
+    trainer = EPOCH_TRAINER_MAP.get(args.num_epochs)
+    if trainer is None:
+        raise ValueError(
+            f"Unsupported num_epochs={args.num_epochs}. "
+            f"Choose from: {sorted(EPOCH_TRAINER_MAP.keys())}"
+        )
+
+    print(f"Using trainer: {trainer} ({args.num_epochs} epochs)")
     subprocess.run([
         "nnUNetv2_train", str(DATASET_ID), CONFIGURATION, "all",
+        "-tr", trainer,
     ], check=True)
 
     results_dir = os.environ["nnUNet_results"]
