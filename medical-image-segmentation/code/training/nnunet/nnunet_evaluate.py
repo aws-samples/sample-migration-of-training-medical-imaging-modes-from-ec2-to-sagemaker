@@ -12,9 +12,9 @@ os.environ.setdefault("nnUNet_raw", "/tmp/nnUNet_raw")
 os.environ.setdefault("nnUNet_preprocessed", "/tmp/nnUNet_preprocessed")
 os.environ.setdefault("nnUNet_results", "/tmp/nnUNet_results")
 
+import json
 import shutil
 import argparse
-import subprocess
 
 DATASET_ID = 1
 CONFIGURATION = "3d_fullres"
@@ -48,11 +48,25 @@ def run(args):
 
     results_dir = os.environ["nnUNet_results"]
 
-    subprocess.run([
-        "nnUNetv2_find_best_configuration", str(DATASET_ID),
-        "-c", CONFIGURATION,
-        "-f", "all",
-    ], check=True)
+    # nnUNetv2_find_best_configuration requires all 5 folds to be trained.
+    # When training with fold 'all', skip it and summarise validation results directly.
+    dataset_results = os.path.join(
+        results_dir,
+        f"Dataset{DATASET_ID:03d}_MedicalSegmentation",
+        f"nnUNetTrainer__{CONFIGURATION}__nnUNetPlans",
+        "fold_all",
+    )
+
+    summary_file = os.path.join(dataset_results, "validation", "summary.json")
+    if os.path.isfile(summary_file):
+        with open(summary_file) as f:
+            summary = json.load(f)
+        mean_dice = summary.get("foreground_mean", {}).get("Dice", "N/A")
+        print(f"Validation Mean Dice: {mean_dice}")
+        print(f"Full summary at: {summary_file}")
+    else:
+        print(f"No summary.json found at {summary_file}")
+        print("Training results are in:", dataset_results)
 
     out_dir = args.out_dir
     os.makedirs(out_dir, exist_ok=True)

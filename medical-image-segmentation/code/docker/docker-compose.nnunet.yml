@@ -6,41 +6,42 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.nnunet
     volumes:
-      - ./data:/app/data
-      - ./output:/app/output
+      - ../data:/opt/ml/input/data/training
+      - ../output:/opt/ml/model
     environment:
-      - SM_CHANNEL_TRAINING=/app/data
-      - SM_MODEL_DIR=/app/output
+      - SM_CHANNEL_TRAINING=/opt/ml/input/data/training
+      - SM_MODEL_DIR=/opt/ml/model
       - nnUNet_raw=/tmp/nnUNet_raw
       - nnUNet_preprocessed=/tmp/nnUNet_preprocessed
       - nnUNet_results=/tmp/nnUNet_results
     command: >
-      python training/nnunet/nnunet_pipeline.py
+      python nnunet_pipeline.py
       --stages preprocess
-      --data /app/data
-      --out_dir /app/output
+      --data /opt/ml/input/data/training
+      --out_dir /opt/ml/model
 
   nnunet-train:
     build:
       context: ..
       dockerfile: docker/Dockerfile.nnunet
     volumes:
-      - ./data:/app/data
-      - ./output:/app/output
+      - ../data:/opt/ml/input/data/training
+      - ../output:/opt/ml/model
     environment:
-      - SM_CHANNEL_TRAINING=/app/data
-      - SM_CHANNEL_PREPROCESSED=/app/output
-      - SM_MODEL_DIR=/app/output
+      - SM_CHANNEL_TRAINING=/opt/ml/input/data/training
+      # SM_CHANNEL_PREPROCESSED shares SM_MODEL_DIR so Stage 1 output is read back as Stage 2 input
+      - SM_CHANNEL_PREPROCESSED=/opt/ml/model
+      - SM_MODEL_DIR=/opt/ml/model
       - nnUNet_raw=/tmp/nnUNet_raw
       - nnUNet_preprocessed=/tmp/nnUNet_preprocessed
       - nnUNet_results=/tmp/nnUNet_results
       - CUDA_VISIBLE_DEVICES=0
     command: >
-      python training/nnunet/nnunet_pipeline.py
+      python nnunet_pipeline.py
       --stages train
-      --data /app/data
-      --preprocessed /app/output
-      --out_dir /app/output
+      --data /opt/ml/input/data/training
+      --preprocessed /opt/ml/model
+      --out_dir /opt/ml/model
     deploy:
       resources:
         reservations:
@@ -54,20 +55,20 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.nnunet
     volumes:
-      - ./data:/app/data
-      - ./output:/app/output
+      - ../data:/opt/ml/input/data/training
+      - ../output:/opt/ml/model
     environment:
-      - SM_CHANNEL_TRAINING=/app/data
-      - SM_MODEL_DIR=/app/output
+      - SM_CHANNEL_TRAINING=/opt/ml/input/data/training
+      - SM_MODEL_DIR=/opt/ml/model
       - nnUNet_raw=/tmp/nnUNet_raw
       - nnUNet_preprocessed=/tmp/nnUNet_preprocessed
       - nnUNet_results=/tmp/nnUNet_results
       - CUDA_VISIBLE_DEVICES=0
     command: >
-      python training/nnunet/nnunet_pipeline.py
+      python nnunet_pipeline.py
       --stages preprocess,train,evaluate
-      --data /app/data
-      --out_dir /app/output
+      --data /opt/ml/input/data/training
+      --out_dir /opt/ml/model
     deploy:
       resources:
         reservations:

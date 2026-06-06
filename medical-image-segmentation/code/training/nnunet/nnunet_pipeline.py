@@ -38,6 +38,8 @@ def build_parser():
                         help="Output directory (SM_MODEL_DIR)")
     parser.add_argument("--n_proc", type=int, default=8,
                         help="Number of processes for preprocessing")
+    parser.add_argument("--num_epochs", type=int, default=1000,
+                        help="Number of training epochs. Supported: 5, 50, 100, 250, 1000 (default), 2000")
     parser.add_argument("--preprocessed", type=str,
                         default=os.environ.get("SM_CHANNEL_PREPROCESSED", ""),
                         help="Preprocessed data from Stage 1 (optional)")
