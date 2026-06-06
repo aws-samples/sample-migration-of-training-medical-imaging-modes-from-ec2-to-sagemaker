@@ -11,4 +11,5 @@ SimpleITK
 nibabel
 sagemaker
 sagemaker-mlflow
+nnunetv2==2.4
 
