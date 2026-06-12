@@ -1,0 +1,320 @@
+"""
+Inference script for medical image segmentation on SageMaker.
+
+Supports SegResNet and SwinUNETR models trained with MONAI.
+Accepts NIfTI files via S3 URI, local path, or base64-encoded payload.
+Returns segmentation mask as a base64-encoded NIfTI file.
+"""
+
+import json
+import logging
+import os
+import base64
+import tempfile
+from typing import Any, Dict, Union
+
+import torch
+import numpy as np
+import nibabel as nib
+from monai.networks.nets import SegResNet, SwinUNETR
+from monai.transforms import (
+    Compose,
+    LoadImaged,
+    EnsureChannelFirstd,
+    Orientationd,
+    Spacingd,
+    Resized,
+    ScaleIntensityRanged,
+    EnsureTyped,
+    Activations,
+    AsDiscrete,
+)
+from monai.inferers import SlidingWindowInferer
+from monai.data import Dataset, DataLoader
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
+
+
+def model_fn(model_dir: str) -> Dict[str, Any]:
+    """Load the trained segmentation model and set up inference pipeline.
+
+    Args:
+        model_dir: Directory containing model artifacts (model.pth or best_model.pth).
+
+    Returns:
+        Dictionary with model, device, transforms, and inferer.
+    """
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    logger.info(f"Using device: {device}")
+
+    # Read model config if available
+    config_path = os.path.join(model_dir, "config.json")
+    model_name = "SegResNet"
+    if os.path.exists(config_path):
+        with open(config_path, "r") as f:
+            config = json.load(f)
+            model_name = config.get("model_name", "SegResNet")
+
+    logger.info(f"Loading model: {model_name}")
+
+    # Initialize model
+    if model_name == "SwinUNETR":
+        model = SwinUNETR(
+            img_size=(128, 128, 64),
+            in_channels=1,
+            out_channels=1,
+            feature_size=24,
+            drop_rate=0.0,
+            attn_drop_rate=0.0,
+            dropout_path_rate=0.0,
+        )
+    else:
+        model = SegResNet(
+            spatial_dims=3,
+            in_channels=1,
+            out_channels=1,
+            init_filters=16,
+            dropout_prob=0.2,
+        )
+
+    # Load weights - try multiple common filenames
+    weight_files = ["best_model.pth", "final_model.pth", "model.pth", "model.pt"]
+    loaded = False
+    for weight_file in weight_files:
+        weight_path = os.path.join(model_dir, weight_file)
+        if os.path.exists(weight_path):
+            checkpoint = torch.load(weight_path, map_location=device, weights_only=False)
+            if isinstance(checkpoint, dict) and "model" in checkpoint:
+                model.load_state_dict(checkpoint["model"])
+            elif isinstance(checkpoint, dict) and "state_dict" in checkpoint:
+                model.load_state_dict(checkpoint["state_dict"])
+            else:
+                model.load_state_dict(checkpoint)
+            logger.info(f"Loaded weights from: {weight_file}")
+            loaded = True
+            break
+
+    if not loaded:
+        logger.warning("No model weights found, using random initialization")
+
+    model = model.to(device)
+    model.eval()
+
+    # Preprocessing transforms (must match training transforms)
+    preprocessing = Compose([
+        LoadImaged(keys="image"),
+        EnsureChannelFirstd(keys="image"),
+        Orientationd(keys="image", axcodes="RAS"),
+        Spacingd(keys="image", pixdim=[1.5, 1.5, 2.0], mode="bilinear"),
+        ScaleIntensityRanged(
+            keys="image", a_min=-100, a_max=500, b_min=0, b_max=1, clip=True
+        ),
+        Resized(keys="image", spatial_size=(128, 128, 64)),
+        EnsureTyped(keys="image"),
+    ])
+
+    # Post-processing
+    post_transforms = Compose([
+        Activations(sigmoid=True),
+        AsDiscrete(threshold=0.5),
+    ])
+
+    # Sliding window inferer for large volumes
+    inferer = SlidingWindowInferer(
+        roi_size=(128, 128, 64),
+        sw_batch_size=4,
+        overlap=0.5,
+    )
+
+    return {
+        "model": model,
+        "device": device,
+        "preprocessing": preprocessing,
+        "post_transforms": post_transforms,
+        "inferer": inferer,
+        "model_name": model_name,
+    }
+
+
+def input_fn(request_body: Union[str, bytes], content_type: str) -> str:
+    """Parse input data and return a file path to the NIfTI image.
+
+    Supports:
+      - application/json with {"file_path": "<s3_uri_or_local_path>"}
+      - application/x-nifti with base64-encoded NIfTI binary
+
+    Args:
+        request_body: The request payload.
+        content_type: MIME type of the request.
+
+    Returns:
+        Local file path to the NIfTI image.
+    """
+    if content_type == "application/json":
+        input_data = json.loads(request_body)
+
+        if "file_path" not in input_data:
+            raise ValueError("JSON payload must contain 'file_path' key")
+
+        file_path = input_data["file_path"]
+
+        if file_path.startswith("s3://"):
+            # Download from S3
+            import boto3
+
+            parts = file_path.replace("s3://", "").split("/", 1)
+            bucket_name, key = parts[0], parts[1]
+
+            s3_client = boto3.client("s3")
+            suffix = ".nii.gz" if key.endswith(".nii.gz") else ".nii"
+            with tempfile.NamedTemporaryFile(
+                delete=False, suffix=suffix
+            ) as temp_file:
+                temp_path = temp_file.name
+            s3_client.download_file(bucket_name, key, temp_path)
+            logger.info(f"Downloaded S3 file to: {temp_path}")
+            return temp_path
+
+        elif file_path.endswith((".nii.gz", ".nii")):
+            # Local file path
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"File not found: {file_path}")
+            return file_path
+
+        else:
+            # Assume base64-encoded NIfTI
+            try:
+                image_data = base64.b64decode(file_path)
+                with tempfile.NamedTemporaryFile(
+                    delete=False, suffix=".nii.gz"
+                ) as temp_file:
+                    temp_file.write(image_data)
+                    temp_path = temp_file.name
+                logger.info(f"Decoded base64 to: {temp_path}")
+                return temp_path
+            except Exception as e:
+                raise ValueError(
+                    f"Invalid file_path: expected S3 URI, local path, or base64. Error: {e}"
+                )
+
+    elif content_type == "application/x-nifti":
+        # Raw binary NIfTI
+        if isinstance(request_body, str):
+            request_body = request_body.encode()
+        with tempfile.NamedTemporaryFile(
+            delete=False, suffix=".nii.gz"
+        ) as temp_file:
+            temp_file.write(request_body)
+            temp_path = temp_file.name
+        logger.info(f"Saved binary NIfTI to: {temp_path}")
+        return temp_path
+
+    else:
+        raise ValueError(f"Unsupported content type: {content_type}")
+
+
+def predict_fn(input_data: str, model_components: Dict[str, Any]) -> Dict[str, Any]:
+    """Run segmentation inference on a NIfTI image.
+
+    Args:
+        input_data: Path to the NIfTI file.
+        model_components: Model and pipeline components from model_fn.
+
+    Returns:
+        Dictionary with segmentation results.
+    """
+    model = model_components["model"]
+    device = model_components["device"]
+    preprocessing = model_components["preprocessing"]
+    post_transforms = model_components["post_transforms"]
+    inferer = model_components["inferer"]
+
+    image_path = input_data
+    logger.info(f"Processing: {image_path}")
+
+    try:
+        # Load original image for metadata
+        original_img = nib.load(image_path)
+        original_affine = original_img.affine
+        original_shape = original_img.shape
+
+        # Preprocess
+        data_dict = {"image": image_path}
+        preprocessed = preprocessing(data_dict)
+        input_tensor = preprocessed["image"].unsqueeze(0).to(device)
+        logger.info(f"Input tensor shape: {input_tensor.shape}")
+
+        # Inference
+        with torch.no_grad():
+            prediction = inferer(input_tensor, model)
+
+        # Post-process
+        prediction = post_transforms(prediction[0])  # remove batch dim
+        seg_array = prediction.cpu().numpy().squeeze()
+        logger.info(f"Segmentation shape: {seg_array.shape}")
+
+        # Compute statistics
+        voxel_count = int(np.sum(seg_array > 0))
+        total_voxels = int(seg_array.size)
+        seg_percentage = (voxel_count / total_voxels) * 100
+
+        # Save segmentation as NIfTI and encode to base64
+        seg_nifti = nib.Nifti1Image(
+            seg_array.astype(np.float32), affine=original_affine
+        )
+        with tempfile.NamedTemporaryFile(
+            delete=False, suffix="_seg.nii.gz"
+        ) as temp_out:
+            nib.save(seg_nifti, temp_out.name)
+            with open(temp_out.name, "rb") as f:
+                seg_encoded = base64.b64encode(f.read()).decode("utf-8")
+            os.unlink(temp_out.name)
+
+        # Cleanup temp input if it was created by us
+        if "/tmp/" in image_path:
+            try:
+                os.unlink(image_path)
+            except OSError:
+                pass
+
+        return {
+            "model_name": model_components["model_name"],
+            "original_shape": list(original_shape),
+            "segmentation_shape": list(seg_array.shape),
+            "segmented_voxels": voxel_count,
+            "total_voxels": total_voxels,
+            "segmentation_percentage": round(seg_percentage, 2),
+            "segmentation_mask_base64": seg_encoded,
+        }
+
+    except Exception as e:
+        logger.error(f"Inference error: {e}")
+        # Cleanup
+        if "/tmp/" in image_path:
+            try:
+                os.unlink(image_path)
+            except OSError:
+                pass
+        return {"error": str(e), "model_name": model_components.get("model_name", "unknown")}
+
+
+def output_fn(prediction: Dict[str, Any], accept: str) -> str:
+    """Format the prediction output as JSON.
+
+    Args:
+        prediction: Inference results dictionary.
+        accept: Accepted response content type.
+
+    Returns:
+        JSON string of the prediction.
+    """
+    if accept == "application/json" or accept == "*/*":
+        return json.dumps(prediction)
+    else:
+        return json.dumps(prediction)

@@ -1,0 +1,6 @@
+monai==1.4.0
+torch
+torchvision
+numpy
+boto3
+itk
