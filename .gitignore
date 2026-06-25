@@ -32,3 +32,11 @@ config_pvt.yaml
 medical-image-segmentation/data/
 medical-image-segmentation/output/
 notebook_outputs/
+
+# Model artifacts and large binary files
+*.pth
+*.tar.gz
+*.nii.gz
+*.dcm
+**/model/logs/
+*_bak.py
