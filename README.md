@@ -2,6 +2,8 @@
 
 End-to-end examples for migrating medical image classification and segmentation workloads from EC2 to Amazon SageMaker, covering data preprocessing, distributed training, experiment tracking, and production deployment.
 
+![Architecture Overview](1770277149670.jpeg)
+
 ## Overview
 
 This repository contains two progressive workshop tracks:
