@@ -24,6 +24,11 @@ Thumbs.db
 # SageMaker
 *.log
 
+# Local config with account-specific values (secrets)
+config.local.yaml
+config_pvt.yaml
+
 # Generated data and output
 medical-image-segmentation/data/
 medical-image-segmentation/output/
+notebook_outputs/

@@ -1,0 +1,98 @@
+# =============================================================================
+# Project Configuration (Public Template)
+# =============================================================================
+# This file is safe to commit. It contains only placeholders and defaults.
+#
+# To use:
+#   1. Copy to config_pvt.yaml:  cp config.yaml config_pvt.yaml
+#   2. Fill in your account-specific values in config_pvt.yaml
+#   3. Run:  python run.py --config config_pvt.yaml <command>
+#
+# Or just run without --config and set environment variables instead.
+# =============================================================================
+
+aws:
+  region: us-east-1
+  # Your AWS account ID (12 digits)
+  account_id: ""
+  # SageMaker execution role name or full ARN. Leave blank to auto-create.
+  sagemaker_role: ""
+  # S3 bucket for outputs. Leave blank to use SageMaker default bucket.
+  s3_bucket: ""
+
+# -----------------------------------------------------------------------------
+# Segmentation
+# -----------------------------------------------------------------------------
+segmentation:
+  # S3 path to training data (must contain train/ and valid/ subdirectories)
+  data_s3: ""
+  # S3 path to trained model artifact (model.tar.gz). Set after training.
+  model_s3: ""
+  # S3 path to a test NIfTI file for inference testing
+  test_nifti_s3: ""
+
+  training:
+    model_name: "SegResNet"         # SegResNet or SwinUNETR
+    instance_type: "ml.g4dn.12xlarge"
+    instance_count: 1
+    epochs: 10
+    batch_size: 2
+    learning_rate: 0.0001
+    framework_version: "2.1.0"
+    py_version: "py310"
+
+  deployment:
+    endpoint_name: "medical-segmentation-async-endpoint"
+    instance_type: "ml.g5.xlarge"
+    initial_instance_count: 1
+    max_instance_count: 3
+    min_instance_count: 0             # 0 enables scale-to-zero
+    max_concurrent_invocations: 2
+    scale_target_backlog: 3.0
+    scale_in_cooldown: 600
+    scale_out_cooldown: 60
+
+# -----------------------------------------------------------------------------
+# Classification
+# -----------------------------------------------------------------------------
+classification:
+  # S3 path to classification data (must contain train/ and valid/ subdirs)
+  data_s3: ""
+  # S3 path to trained model artifact (model.tar.gz). Set after training.
+  model_s3: ""
+  # S3 path to a test DICOM/image file for inference testing
+  test_image_s3: ""
+
+  training:
+    model_name: "DenseNet121"       # DenseNet121 or ViT
+    num_classes: 8
+    instance_type: "ml.g5.xlarge"
+    instance_count: 1
+    epochs: 20
+    batch_size: 32
+    learning_rate: 0.001
+    framework_version: "2.5.1"
+    py_version: "py311"
+
+  deployment:
+    endpoint_name: "medical-classification-async-endpoint"
+    instance_type: "ml.g5.xlarge"
+    initial_instance_count: 1
+    max_instance_count: 3
+    min_instance_count: 0             # 0 enables scale-to-zero
+    max_concurrent_invocations: 4
+    scale_target_backlog: 5.0
+    scale_in_cooldown: 300
+    scale_out_cooldown: 60
+
+# -----------------------------------------------------------------------------
+# Experiment Tracking (Optional)
+# -----------------------------------------------------------------------------
+tracking:
+  use_mlflow: false
+  mlflow_tracking_uri: ""           # ARN of SageMaker MLflow server or local path
+  mlflow_experiment_name: "medical-imaging"
+
+  use_wandb: false
+  wandb_project: "medical-imaging"
+  wandb_api_key: ""                 # Or set WANDB_API_KEY env var

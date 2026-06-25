@@ -1,382 +1,275 @@
-# Medical Imaging on AWS SageMaker Workshop
+# Migrating Medical Imaging Training from EC2 to Amazon SageMaker
 
-End-to-end workshops for medical image classification and segmentation using Amazon SageMaker, covering data preprocessing, training strategies, and production deployment.
+End-to-end examples for migrating medical image classification and segmentation workloads from EC2 to Amazon SageMaker, covering data preprocessing, distributed training, experiment tracking, and production deployment.
 
 ## Overview
 
-This repository contains two comprehensive workshops:
+This repository contains two progressive workshop tracks:
 
-1. **Medical Image Classification** - Train classification models from EC2 to SageMaker with custom containers
-2. **Medical Image Segmentation** - 3D segmentation with single/multi-GPU distributed training using MONAI
+1. **Medical Image Classification** - Migrate a DenseNet121 spine X-ray classifier from EC2 to SageMaker (Script Mode, BYOC, MLflow, async deployment)
+2. **Medical Image Segmentation** - Train 3D MONAI models (SegResNet, SwinUNETR) on SageMaker with single-GPU, FSDP multi-GPU, HPO, and async endpoints with scale-to-zero
 
 ## Repository Structure
 
 ```
-medical-imaging-sagemaker-workshop/
+.
+├── config.yaml                           # Public config template (placeholders)
+├── run.py                                # CLI: train/deploy/invoke/cleanup
+├── run_notebook.py                       # Run a single notebook with config injected
+├── run_all_notebooks.py                  # Run all notebooks end-to-end
+├── Makefile                              # Test targets
+├── pytest.ini                            # Test configuration
+├── tests/                                # Pytest integration tests
 ├── medical-image-classification/
 │   └── notebooks/
 │       ├── 00_ec2_training/              # Baseline EC2 training
 │       ├── 01_data_preprocessing/        # SageMaker Processing
 │       ├── 02_sm_script_mode/            # SageMaker Script Mode
 │       ├── 03_sagemaker_byoc/            # Bring Your Own Container
-│       └── 04_sagemaker_byoc_mlflow/     # BYOC + MLflow
+│       ├── 04_sagemaekr_byoc_mlflow/     # BYOC + MLflow tracking
+│       └── 05_sagemaker_deployment/      # Async + realtime endpoints
 └── medical-image-segmentation/
     ├── code/
-    │   ├── training/                     # Training scripts (DDP/FSDP)
-    │   ├── models/                       # Model definitions
-    │   └── scripts/                      # Build scripts
+    │   ├── training/                     # Training scripts (simple, FSDP, DDP)
+    │   ├── models/                       # Model definitions (SegResNet, SwinUNETR)
+    │   └── scripts/                      # IAM role helper, build scripts
     └── notebooks/
         ├── lab1_single_gpu_training.ipynb
         ├── lab2_fsdp_multi_gpu.ipynb
         ├── lab3_wandb_experiment_tracking.ipynb
         ├── lab4_ddp_unified_tracking.ipynb
-        └── lab5_hyperparameter_optimization.ipynb
+        ├── lab5_hyperparameter_optimization.ipynb
+        ├── lab6_nnunet_pipeline.ipynb
+        ├── lab7_model_deployment.ipynb
+        └── deploy/                       # Inference scripts for endpoints
 ```
 
 ## Prerequisites
 
-### AWS Requirements
-- AWS Account with SageMaker access
-- IAM role with permissions:
-  - `AmazonSageMakerFullAccess`
-  - `AmazonS3FullAccess`
-  - `AmazonElasticContainerRegistryPublicFullAccess`
+- AWS account with SageMaker access
+- IAM role with `AmazonSageMakerFullAccess` and `AmazonS3FullAccess`
 - S3 bucket for data and model artifacts
-
-### Local Development
 - Python 3.10+
-- Docker (for custom containers)
-- AWS CLI configured
-- 16GB+ GPU memory (for local testing)
+- Docker (for BYOC notebooks)
+- AWS CLI configured (`aws configure`)
 
 ## Quick Start
 
-### 1. Clone Repository
+### 1. Clone and configure
+
 ```bash
 git clone <repository-url>
-cd medical-imaging-sagemaker-workshop
+cd sample-migration-of-training-medical-imaging-modes-from-ec2-to-sagemaker
+
+# Create your private config (gitignored)
+cp config.yaml config_pvt.yaml
 ```
 
-### 2. ECR Authentication
+Edit `config_pvt.yaml` with your values:
+
+```yaml
+aws:
+  region: us-east-1
+  account_id: "123456789012"
+  sagemaker_role: "YourSageMakerRole"
+  s3_bucket: "your-bucket-name"
+
+segmentation:
+  data_s3: "s3://your-bucket/segmentation_data/"
+  model_s3: ""   # Set after training
+  test_nifti_s3: "s3://your-bucket/segmentation_data/test/subject_01/img.nii.gz"
+
+classification:
+  data_s3: "s3://your-bucket/classification_data/"
+  model_s3: ""   # Set after training
+```
+
+### 2. Verify your AWS setup
+
 ```bash
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 763104351884.dkr.ecr.us-east-1.amazonaws.com
+pip install -r tests/requirements.txt
+make test-cheap
 ```
 
-### 3. Choose Your Workshop
-- **Classification**: `cd medical-image-classification/notebooks`
-- **Segmentation**: `cd medical-image-segmentation/notebooks`
+This validates IAM role, S3 access, and SageMaker API connectivity without launching any resources.
+
+### 3. Run notebooks or use the CLI
+
+**Option A: Run notebooks** (step-by-step, with explanations)
+
+```bash
+pip install papermill pyyaml
+
+# Run a single notebook
+python run_notebook.py medical-image-segmentation/notebooks/lab1_single_gpu_training.ipynb
+
+# Run all segmentation notebooks
+python run_all_notebooks.py --seg
+
+# Run all classification notebooks
+python run_all_notebooks.py --cls
+```
+
+**Option B: Use the CLI** (fast, no notebooks)
+
+```bash
+python run.py train-segmentation
+python run.py deploy-segmentation
+python run.py invoke-segmentation s3://your-bucket/scans/patient_01.nii.gz
+python run.py cleanup-segmentation
+```
+
+## Running Notebooks
+
+Notebooks on GitHub contain placeholders (`YOUR_BUCKET_NAME`, `YOUR_TRAINING_JOB`, etc.) so they are safe to share. The runner scripts inject your real values from `config_pvt.yaml` at runtime without modifying the source files.
+
+```bash
+# Preview what substitutions will be applied
+python run_notebook.py --dry-run medical-image-segmentation/notebooks/lab7_model_deployment.ipynb
+
+# Run a single notebook (output saved to ./notebook_outputs/)
+python run_notebook.py medical-image-segmentation/notebooks/lab1_single_gpu_training.ipynb
+
+# Run all notebooks
+python run_all_notebooks.py
+
+# Run only segmentation or classification
+python run_all_notebooks.py --seg
+python run_all_notebooks.py --cls
+
+# Skip specific notebooks
+python run_all_notebooks.py --skip lab6 wandb
+
+# Stop on first failure
+python run_all_notebooks.py --stop-on-failure
+```
+
+Executed notebooks with outputs are saved to `notebook_outputs/` (gitignored).
+
+## CLI Runner (`run.py`)
+
+A command-line tool that runs the full pipeline without opening notebooks. Reads all parameters from `config_pvt.yaml` (auto-detected) or specify with `--config`.
+
+```bash
+python run.py setup-role                       # Create/verify IAM role
+python run.py status                           # Check all endpoint status
+
+# Segmentation
+python run.py train-segmentation               # Launch training job
+python run.py deploy-segmentation              # Deploy async endpoint
+python run.py invoke-segmentation <s3_uri>     # Run inference on NIfTI file
+python run.py cleanup-segmentation             # Delete endpoint + resources
+
+# Classification
+python run.py train-classification             # Launch training job
+python run.py deploy-classification            # Deploy async endpoint
+python run.py invoke-classification <s3_uri>   # Classify a DICOM image
+python run.py cleanup-classification           # Delete endpoint + resources
+```
+
+Config priority: `config_pvt.yaml` > `config.local.yaml` > `config.yaml`
+
+Environment variables override config values (useful for CI):
+
+| Env Variable | Config Key |
+|---|---|
+| `AWS_DEFAULT_REGION` | `aws.region` |
+| `AWS_SAGEMAKER_ROLE` | `aws.sagemaker_role` |
+| `SEGMENTATION_DATA_S3` | `segmentation.data_s3` |
+| `SEGMENTATION_MODEL_S3` | `segmentation.model_s3` |
+| `CLASSIFICATION_DATA_S3` | `classification.data_s3` |
+| `WANDB_API_KEY` | `tracking.wandb_api_key` |
 
 ## Workshop 1: Medical Image Classification
 
-Progressive journey from EC2 to production SageMaker deployment.
+Progressive migration from EC2 to production SageMaker deployment.
 
-### Lab 00: EC2 Training (Baseline)
-**Duration**: 30 minutes
+| Lab | Topic | Instance | Duration |
+|-----|-------|----------|----------|
+| 00 | EC2 baseline training | local GPU | 30 min |
+| 01 | Data preprocessing (SageMaker Processing) | ml.m5.xlarge | 45 min |
+| 02 | SageMaker Script Mode | ml.g5.xlarge | 45 min |
+| 03 | Bring Your Own Container | ml.g5.xlarge | 60 min |
+| 04 | BYOC + MLflow tracking | ml.g5.xlarge | 60 min |
+| 05 | Async + realtime deployment | ml.g5.xlarge | 45 min |
 
-Train classification models on EC2 to establish baseline performance.
-
-### Lab 01: Data Preprocessing
-**Duration**: 45 minutes  
-**Instance**: ml.m5.xlarge
-
-Split datasets into train/test/val using SageMaker Processing.
-
-**Input Structure:**
-```
-data/
-├── class_1/
-│   ├── image_1.png
-│   └── ...
-└── class_2/
-    └── ...
-```
-
-**Output Structure:**
-```
-data/
-├── train/
-├── test/
-└── val/
-```
-
-### Lab 02: SageMaker Script Mode
-**Duration**: 45 minutes  
-**Instance**: ml.g5.xlarge
-
-Use managed PyTorch containers with minimal code changes.
-
-**Key Features:**
-- Automatic infrastructure provisioning
-- Built-in distributed training support
-- Model artifact management
-- CloudWatch integration
-
-### Lab 03: Bring Your Own Container (BYOC)
-**Duration**: 60 minutes  
-**Instance**: ml.g5.xlarge
-
-Full control with custom Docker containers.
-
-**Benefits:**
-- Custom dependencies and library versions
-- Complete environment control
-- Reproducible training environments
-- Support for any ML framework
-
-### Lab 04: BYOC + MLflow
-**Duration**: 60 minutes  
-**Instance**: ml.g5.xlarge
-
-Add experiment tracking with MLflow integration.
-
-**Features:**
-- Automatic hyperparameter logging
-- Metric tracking over time
-- Model versioning
-- Experiment comparison
+**Dataset:** Spine X-ray classification (8 classes: disc narrowing, osteophytes, spondylolisthesis, etc.)
 
 ## Workshop 2: Medical Image Segmentation
 
 Production-scale 3D medical image segmentation with MONAI.
 
-### Lab 1: Single GPU Training
-**Duration**: 30 minutes  
-**Instance**: ml.g5.xlarge (1 GPU)
+| Lab | Topic | Instance | Duration |
+|-----|-------|----------|----------|
+| 1 | Single GPU training (SegResNet) | ml.g5.xlarge | 30 min |
+| 2 | Multi-GPU FSDP | ml.g5.12xlarge | 45 min |
+| 3 | Weights & Biases tracking | ml.g5.xlarge | 30 min |
+| 4 | DDP + unified tracking | ml.g5.12xlarge | 45 min |
+| 5 | Hyperparameter optimization | multiple | 60+ min |
+| 6 | nnU-Net pipeline | ml.g5.xlarge | 60 min |
+| 7 | Async endpoint + scale-to-zero | ml.g5.xlarge | 45 min |
 
-Train SegResNet for 3D medical image segmentation.
+**Dataset:** 3D CT/MRI volumes (NIfTI format) for organ segmentation.
 
-**Models Available:**
-- SegResNet (~5M params, 2GB memory)
-- UNet (~31M params, 8GB memory)
-- SwinUNETR (~62M params, 20GB memory)
+## Testing
 
-### Lab 2: Multi-GPU FSDP
-**Duration**: 45-60 minutes  
-**Instance**: ml.g5.12xlarge (4 GPUs)
+```bash
+# Install test dependencies
+make install
 
-Scale training with Fully Sharded Data Parallel.
+# Quick validation (no AWS resources created)
+make test-smoke          # Notebook structure, syntax, imports
+make test-cheap          # AWS connectivity + permissions check
 
-**Benefits:**
-- Train larger models (SwinUNETR)
-- Reduced memory per GPU
-- Near-linear scaling efficiency
-- Automatic gradient sharding
+# Full integration (creates real resources — costs money)
+make test-training       # Launch training jobs
+make test-deployment     # Deploy endpoints
+make test-all            # Everything
+```
 
-### Lab 3: Weights & Biases Tracking
-**Duration**: 30 minutes  
-**Instance**: ml.g5.xlarge
+Test tiers:
 
-Advanced experiment tracking and visualization.
-
-**Features:**
-- Real-time metric visualization
-- Hyperparameter comparison
-- Model artifact versioning
-- Team collaboration
-
-### Lab 4: DDP Unified Tracking
-**Duration**: 45 minutes  
-**Instance**: ml.g5.12xlarge (4 GPUs)
-
-Combine TensorBoard, MLflow, and WandB with DDP.
-
-### Lab 5: Hyperparameter Optimization
-**Duration**: 60+ minutes  
-**Instance**: Multiple
-
-Automated hyperparameter tuning with SageMaker.
-
-**Strategies:**
-- Bayesian optimization
-- Random search
-- Grid search
-- Cost-effective tuning
+| Target | What it checks | Cost |
+|--------|----------------|------|
+| `test-smoke` | Notebook JSON valid, Python syntax, expected files exist | Free |
+| `test-cheap` | IAM role, S3 access, SageMaker API connectivity | ~$0 |
+| `test-training` | Launches real training jobs | $$ (GPU hours) |
+| `test-deployment` | Deploys real endpoints | $$ (GPU hours) |
 
 ## Cost Optimization
 
-### Instance Recommendations
+| Strategy | Savings | How |
+|----------|---------|-----|
+| Warm pools | ~50% startup time | `keep_alive_period_in_seconds=1800` |
+| Spot instances | Up to 70% | `use_spot_instances=True` |
+| Scale-to-zero | Pay only when invoked | Async endpoint + auto-scaling min=0 |
+| Right-sizing | Varies | Use ml.g5.xlarge for dev, scale up for production |
 
-| Use Case | Instance | GPUs | Cost/Hour | Notes |
-|----------|----------|------|-----------|-------|
-| Prototyping | ml.g5.xlarge | 1 | $1.41 | Single GPU development |
-| Classification | ml.g5.2xlarge | 1 | $1.52 | Production training |
-| Segmentation (Multi-GPU) | ml.g5.12xlarge | 4 | $7.09 | FSDP/DDP training |
-| Budget Multi-GPU | ml.g4dn.12xlarge | 4 | $4.89 | Cost-effective option |
+**Instance reference:**
 
-### Best Practices
-
-1. **Use Warm Pools**
-   ```python
-   keep_alive_period_in_seconds=1800
-   ```
-
-2. **Enable Spot Instances** (Save up to 70%)
-   ```python
-   use_spot_instances=True,
-   max_wait=7200
-   ```
-
-3. **Cache Dependencies**
-   ```python
-   environment={"PIP_CACHE_DIR": "/opt/ml/sagemaker/warmpoolcache/pip"}
-   ```
-
-4. **Optimize Batch Size**
-   - Single GPU: batch_size=2-4
-   - Multi-GPU: batch_size=2 per GPU
-
-## Data Preparation
-
-### Classification Data
-```
-s3://bucket/classification_data/
-├── train/
-│   ├── class_1/
-│   └── class_2/
-├── test/
-└── val/
-```
-
-### Segmentation Data
-```
-s3://bucket/segmentation_data/
-├── train/
-│   └── subject_001/
-│       ├── img.nii.gz
-│       └── label.nii.gz
-└── valid/
-```
-
-## Training Strategies
-
-### Single GPU
-```python
-estimator = PyTorch(
-    entry_point="train.py",
-    instance_type="ml.g5.xlarge",
-    instance_count=1
-)
-```
-
-### Data Parallel (DDP)
-```python
-estimator = PyTorch(
-    entry_point="train_ddp.py",
-    instance_type="ml.g5.12xlarge",
-    instance_count=1,
-    distribution={"pytorchddp": {"enabled": True}}
-)
-```
-
-### Fully Sharded (FSDP)
-```python
-estimator = PyTorch(
-    entry_point="train_fsdp.py",
-    instance_type="ml.g5.12xlarge",
-    instance_count=1,
-    distribution={"pytorchddp": {"enabled": True}}
-)
-```
-
-## Experiment Tracking
-
-### TensorBoard (Built-in)
-```bash
-tensorboard --logdir=./output
-```
-
-### MLflow
-```python
-hyperparameters = {
-    "use_mlflow": True,
-    "mlflow_tracking_uri": "arn:aws:sagemaker:...",
-    "mlflow_experiment_name": "medical-imaging"
-}
-```
-
-### Weights & Biases
-```python
-hyperparameters = {
-    "use_wandb": True,
-    "wandb_project": "medical-imaging",
-    "wandb_api_key": "your-api-key"
-}
-```
+| Instance | GPUs | GPU Memory | Cost/Hour | Use Case |
+|----------|------|------------|-----------|----------|
+| ml.g5.xlarge | 1x A10G | 24 GB | ~$1.41 | Dev, single model training |
+| ml.g5.2xlarge | 1x A10G | 24 GB | ~$1.52 | Larger batch sizes |
+| ml.g5.12xlarge | 4x A10G | 96 GB | ~$7.09 | Multi-GPU FSDP/DDP |
+| ml.g4dn.12xlarge | 4x T4 | 64 GB | ~$4.89 | Budget multi-GPU |
 
 ## Troubleshooting
 
-### Out of Memory (OOM)
-- Reduce batch size
-- Use gradient checkpointing
-- Switch to FSDP for multi-GPU
-- Enable mixed precision (FP16)
+**OOM errors:** Reduce batch_size, enable mixed precision, or switch to FSDP for multi-GPU sharding.
 
-### Slow Training
-- Increase batch size
-- Use multiple GPUs
-- Enable mixed precision
-- Optimize data loading (num_workers)
+**Slow training:** Increase batch_size, use multi-GPU instances, optimize `num_workers` in DataLoader.
 
-### Data Loading Issues
-- Verify S3 paths and permissions
-- Check data format (NIfTI for segmentation)
-- Ensure correct folder structure
+**S3 permission errors:** Verify IAM role has S3 access and the bucket policy allows the SageMaker role.
 
-### Container Issues
-- Test locally with Docker first
-- Check CloudWatch logs
-- Verify IAM permissions
-- Inspect container: `docker run -it <image> /bin/bash`
+**Container failures:** Test locally with `docker run -it <image> /bin/bash`, then check CloudWatch logs for the training job.
 
-## Deployment
-
-### Build Custom Container
-```bash
-cd code/scripts
-./build_and_push.sh <image-name> <region>
-```
-
-### Deploy to Endpoint
-```python
-predictor = model.deploy(
-    instance_type="ml.g5.xlarge",
-    initial_instance_count=1
-)
-```
-
-## Resources
-
-### Documentation
-- [SageMaker Python SDK](https://sagemaker.readthedocs.io/)
-- [MONAI Documentation](https://docs.monai.io/)
-- [PyTorch on SageMaker](https://docs.aws.amazon.com/sagemaker/latest/dg/pytorch.html)
-
-### AWS Services
-- [Amazon SageMaker](https://aws.amazon.com/sagemaker/)
-- [Medical Imaging on AWS](https://aws.amazon.com/health/solutions/medical-imaging/)
-- [AWS Pricing Calculator](https://calculator.aws)
-
-### Examples
-- [SageMaker Examples](https://github.com/aws/amazon-sagemaker-examples)
-- [MONAI Tutorials](https://github.com/Project-MONAI/tutorials)
-
-## Support
-
-For issues and questions:
-- Open a GitHub issue
-- Check CloudWatch logs for training jobs
-- Review AWS SageMaker documentation
-- Consult workshop-specific READMEs
+**Cold start on endpoints:** Async endpoints with scale-to-zero take 8-12 minutes to warm up. Set `MinCapacity=1` if latency matters.
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
 
 ## Acknowledgments
 
-Built with:
-- [Amazon SageMaker](https://aws.amazon.com/sagemaker/) - ML platform
-- [PyTorch](https://pytorch.org/) - Deep learning framework
-- [MONAI](https://monai.io/) - Medical imaging framework
-- [MLflow](https://mlflow.org/) - Experiment tracking
-- [Weights & Biases](https://wandb.ai/) - ML operations
+Built with [Amazon SageMaker](https://aws.amazon.com/sagemaker/), [PyTorch](https://pytorch.org/), [MONAI](https://monai.io/), [MLflow](https://mlflow.org/), and [Weights & Biases](https://wandb.ai/).
