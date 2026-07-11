@@ -1,4 +1,4 @@
-monai==1.4.0
+monai==1.5.2rc1
 torch
 torchvision
 numpy
