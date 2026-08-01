@@ -1,5 +1,5 @@
 nnunetv2>=2.4
-torch==2.4.1
+torch==2.13.0
 numpy==1.26.4
 SimpleITK
 nibabel
