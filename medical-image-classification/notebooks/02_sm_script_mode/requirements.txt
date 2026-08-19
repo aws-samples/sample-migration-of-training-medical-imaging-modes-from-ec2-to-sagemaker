@@ -1,5 +1,5 @@
 nibabel
-monai==1.4.0
+monai==1.6.0
 simpleitk
 smdebug 
 torch 
